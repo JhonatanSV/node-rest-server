@@ -1,27 +1,26 @@
-const { response, request } = require("express");
+const { response, request, query } = require("express");
 const bcryptjs = require("bcryptjs");
 
 const User = require("../models/user");
 
-const getUsers = (req = request, res = response) => {
-  const params = req.query;
+const getUsers = async (req = request, res = response) => {
+  const { limit = 5, from = 0 } = req.query;
+  const condition = { state: true };
+
+  const [total, users] = await Promise.all([
+    User.countDocuments(condition),
+    User.find(condition).skip(Number(from)).limit(Number(limit)),
+  ]);
 
   res.json({
-    msg: "GET",
-    params,
+    total,
+    users,
   });
 };
 
 const postUser = async (req, res = response) => {
   const { name, mail, password, role } = req.body;
   const user = new User({ name, mail, password, role });
-
-  const existsEmail = await User.findOne({ mail });
-  if (existsEmail) {
-    return res.status(400).json({
-      msg: "The mail already exists",
-    });
-  }
 
   const salt = bcryptjs.genSaltSync();
   user.password = bcryptjs.hashSync(password, salt);
@@ -33,21 +32,33 @@ const postUser = async (req, res = response) => {
   });
 };
 
-const putUser = (req, res = response) => {
+const putUser = async (req, res = response) => {
   const id = req.params.id;
+  const { _id, password, google, mail, ...data } = req.body;
+
+  if (password) {
+    const salt = bcryptjs.genSaltSync();
+    data.password = bcryptjs.hashSync(password, salt);
+  }
+
+  const userDB = await User.findByIdAndUpdate(id, data, { new: true });
 
   res.json({
-    msg: "",
-    id,
+    userDB,
   });
 };
 
-const deleteUser = (req, res = response) => {
+const deleteUser = async (req, res = response) => {
   const id = req.params.id;
 
-  res.json({
-    msg: "",
+  const user = await User.findByIdAndUpdate(
     id,
+    { state: false },
+    { new: true }
+  );
+
+  res.json({
+    user,
   });
 };
 
